@@ -57,6 +57,7 @@
 #ifndef SRP_H
 #define SRP_H
 
+#include <stdbool.h>
 
 struct SRPVerifier;
 struct SRPUser;
@@ -197,5 +198,9 @@ void                  srp_user_process_challenge( struct SRPUser * usr,
                                                   
 /* bytes_HAMK must be exactly srp_user_get_session_key_length() bytes in size */
 void                  srp_user_verify_session( struct SRPUser * usr, const unsigned char * bytes_HAMK );
+
+/* If set, the username won't be used when calculating x */
+void                  srp_user_set_no_username_in_x( struct SRPUser * usr, bool value );
+bool                  srp_user_get_no_username_in_x( struct SRPUser * usr );
 
 #endif /* Include Guard */
