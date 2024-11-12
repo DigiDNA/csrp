@@ -44,6 +44,45 @@
 #include <openssl/rand.h>
 #include "srp.h"
 
+void printBuffer( const char * name, const unsigned char * buffer, unsigned int length )
+{
+    printf( "{\n" );
+    printf( "    /* %s */\n", name );
+    
+    for( unsigned int i = 0; i < length; i++ )
+    {
+        if( i == 0 || ( i + 1 ) % 16 == 1 )
+        {
+            printf( "    " );
+        }
+        
+        printf( "0x%02X", buffer[ i ] );
+        
+        if( i != ( length - 1 ) )
+        {
+            if( ( i + 1 ) % 16 == 0 )
+            {
+                printf( ",\n" );
+            }
+            else
+            {
+                printf( ", " );
+            }
+        }
+    }
+    
+    printf( "\n" );
+    printf( "},\n" );
+}
+
+void printBN( const char * name, const BIGNUM * n )
+{
+    unsigned int   length = BN_num_bytes( n );
+    unsigned char * bytes = malloc( length );
+    
+    printBuffer( name, bytes, BN_bn2bin( n, bytes ) );
+}
+
 static int	g_initialized = 0;
 
 typedef struct
@@ -540,7 +579,7 @@ void srp_create_salted_verification_key( SRP_HashAlgorithm alg,
 
     init_random(); /* Only happens once */
 
-    BN_rand(s, 32, -1, 0);
+    BN_rand(s, 256, -1, 0);
     x = calculate_x( alg, s, username, password, len_password, false );
 
     if( !x )
@@ -629,6 +668,7 @@ struct SRPVerifier *  srp_verifier_new( SRP_HashAlgorithm alg, SRP_NGType ng_typ
     if ( !BN_is_zero(tmp1) )
     {
        BN_rand(b, 256, -1, 0);
+       printBN( "b", b );
 
        if (rfc5054_compat)
           k = H_nn_rfc5054(alg, ng->N, ng->N, ng->g);
@@ -655,12 +695,17 @@ struct SRPVerifier *  srp_verifier_new( SRP_HashAlgorithm alg, SRP_NGType ng_typ
           BN_mod_exp(tmp2, ng->g, b, ng->N, ctx);
           BN_add(B, tmp1, tmp2);
        }
+       
+       printBN( "B", B );
 
        if (rfc5054_compat)
           u = H_nn_rfc5054(alg, ng->N, A, B);
        else
           u = H_nn_orig(alg, A, B);
 
+        printBN( "u", u );
+        printBN( "k", k );
+        
        if(!u)
        {
           free(ver);
@@ -672,6 +717,7 @@ struct SRPVerifier *  srp_verifier_new( SRP_HashAlgorithm alg, SRP_NGType ng_typ
        BN_mod_exp(tmp1, v, u, ng->N, ctx);
        BN_mul(tmp2, A, tmp1, ctx);
        BN_mod_exp(S, tmp2, b, ng->N, ctx);
+       printBN( "S", S );
 
        hash_num(alg, S, ver->session_key);
 
@@ -903,8 +949,12 @@ void  srp_user_start_authentication( struct SRPUser * usr, const char ** usernam
 {
     BN_CTX  *ctx  = BN_CTX_new();
     BN_rand(usr->a, 256, -1, 0);
+    printBN( "a", usr->a );
+    
     BN_mod_exp(usr->A, usr->ng->g, usr->a, usr->ng->N, ctx);
     BN_CTX_free(ctx);
+    printBN( "A", usr->A );
+    
 
     *len_A   = BN_num_bytes(usr->A);
     *bytes_A = (const unsigned char *)malloc( *len_A );
@@ -962,6 +1012,7 @@ void  srp_user_process_challenge( struct SRPUser * usr,
     if (!x)
        goto cleanup_and_exit;
 
+    printBN( "x", x );
     if (usr->rfc5054)
        k = H_nn_rfc5054(usr->hash_alg, usr->ng->N, usr->ng->N, usr->ng->g);
     else
@@ -997,6 +1048,10 @@ void  srp_user_process_challenge( struct SRPUser * usr,
             if (len_M)
                 *len_M   = 0;
         }
+        
+        printBuffer( "K", usr->session_key, hash_len );
+        printBuffer( "M1", usr->M, hash_len );
+        printBuffer( "M2", usr->H_AMK, hash_len );
         
         *bytes_M = usr->M;
         if (len_M)
